@@ -1,12 +1,49 @@
 #include <iostream>
+#include <thread>
+#include <atomic>
 #include <cstring>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include "Messages.h"
+
+#include "include/Messages.h"
+#include "include/RingBuffer.h"
+
+constexpr size_t BUFFER_SIZE = 1024;
+
+RingBuffer<AddOrderMsg, BUFFER_SIZE> ringBuffer;
+
+std::atomic<bool> running{true};
+
+void consumer_thread()
+{
+    std::cout << "Consumer thread started (LOB Simulation)\n";
+
+    AddOrderMsg msg;
+    uint64_t count = 0;
+
+    while(running)
+    {
+        if (ringBuffer.pop(msg))
+        {
+            if (count % 10 == 0)
+            {
+                std::cout << "[LOB Consumer] Processing Order ID: " << msg.id 
+                    << " Price: " << msg.price << "\n";
+            }
+            count++;
+        }
+        else
+        {
+            std::this_thread::yield();
+        }
+    }
+}
 
 int main()
 {
+    std::thread consumer(consumer_thread);
+
     int sockfd;
     struct sockaddr_in servaddr, cliaddr;
 
@@ -15,6 +52,10 @@ int main()
         perror("Socket creation failed");
         return -1;
     }
+
+    struct timeval tv;
+    tv.tv_sec = 1; tv.tv_usec = 0;
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
@@ -32,7 +73,7 @@ int main()
     char buffer[1024];
     socklen_t len = sizeof(cliaddr);
 
-    while (true)
+    while (running)
     {
         int n = recvfrom(sockfd, (char *)buffer, 1024, MSG_WAITALL, (struct sockaddr *)&cliaddr, &len);
 
@@ -42,20 +83,17 @@ int main()
 
             if(type == MsgType::AddOrder)
             {
-                AddOrderMsg* msg = reinterpret_cast<AddOrderMsg*>(buffer);
+                AddOrderMsg* msgPtr = reinterpret_cast<AddOrderMsg*>(buffer);
 
-                std::cout << "[UDP] ADD ID=" << msg->id 
-                          << " Px=" << msg->price 
-                          << " Qty=" << msg->quantity 
-                          << " Side=" << msg->side << std::endl;
-            }
-            else if (type == MsgType::CancelOrder)
-            {
-                std::cout << "[UDP] CANCEL received" << std::endl;
+                if(!ringBuffer.push(*msgPtr))
+                {
+                    std::cerr << "Ring buffer FULL! Dropping packet.\n";
+                }
             }
         }
     }
 
     close(sockfd);
+    consumer.join();
     return 0;
 }
