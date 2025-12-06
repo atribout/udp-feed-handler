@@ -8,6 +8,7 @@
 
 #include "OrderBook.h"
 #include "Order.h"
+#include "Listeners.h"
 #include "include/Messages.h"
 #include "include/RingBuffer.h"
 
@@ -15,42 +16,47 @@ constexpr size_t BUFFER_SIZE = 1024;
 RingBuffer<AddOrderMsg, BUFFER_SIZE> ringBuffer;
 std::atomic<bool> running{true};
 
-struct FeedListener
-{
-    void onTrade(uint64_t aggId, uint64_t passId, int32_t price, uint32_t qty)
-    {
-        std::cout << "   [EXEC] " << qty << " @ " << price << "\n";
-    }
-    void onOrderAdded(uint64_t, int32_t, uint32_t, Side) {}
-    void onOrderCancelled(uint64_t) {}
-    void onOrderRejected(uint64_t id, RejectReason r)
-    {
-        std::cout << "   [REJECT] Order " << id << " Reason: " << (int)r << "\n";
-    }
-    void onOrderBookUpdate(int32_t, uint32_t, Side) {}
-
-};
-
 void consumer_thread()
 {
     std::cout << "Engine started (waiting for data)...\n";
 
-    FeedListener listener;
-    OrderBook<FeedListener> lob(listener);
+    EmptyListener listener;
+    OrderBook<EmptyListener> lob(listener);
 
     AddOrderMsg msg;
 
-    while(running)
-    {
-        if (ringBuffer.pop(msg))
-        {
-            Side side = (msg.side == 'B') ? Side::Buy : Side::Sell;
+    uint64_t totalLatency = 0;
+    uint64_t maxLatency = 0;
+    uint64_t count = 0;
 
+    while (running) {
+        if (ringBuffer.pop(msg)) {
+            
+            auto start = std::chrono::high_resolution_clock::now();
+
+            // --- CRITICAL ZONE ---
+            Side side = (msg.side == 'B') ? Side::Buy : Side::Sell;
             Order newOrder(msg.id, msg.price, msg.quantity, side);
             lob.submitOrder(newOrder);
-        }
-        else
-        {
+            // -----------------------------------------
+
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+            
+            totalLatency += duration;
+            if (duration > maxLatency) maxLatency = duration;
+            count++;
+
+            if (count % 100000 == 0) {
+                std::cout << "[LATENCY] Average per order: " 
+                          << (totalLatency / 100000) << " nanoseconds (" 
+                          << (totalLatency / 100000 / 1000.0) << " µs)\n";
+                std::cout << "[LATENCY] Avg: " << (totalLatency / 100000) << " ns | "
+                    << "Max (Jitter): " << maxLatency << " ns\n";
+                totalLatency = 0;
+                maxLatency = 0;
+            }
+        } else {
             std::this_thread::yield();
         }
     }

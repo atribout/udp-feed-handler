@@ -25,7 +25,6 @@ try:
              print(f"Sent Order #{order_id}: {qty} @ {price} ({side.decode()})")
 
         order_id +=1
-        time.sleep(0.1)
 
 except KeyboardInterrupt:
         print("Halted.")
