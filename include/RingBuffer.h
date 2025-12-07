@@ -45,6 +45,25 @@ public:
         return true;
     }
 
+    T* claim()
+    {
+        const auto current_head = head.load(std::memory_order_relaxed);
+        const auto current_tail = tail.load(std::memory_order_acquire);
+
+        if(current_head - current_tail >= Size) 
+        {
+            return nullptr;
+        }
+
+        return &buffer[current_head & mask];
+    }
+
+    void publish()
+    {
+        const auto current_head = head.load(std::memory_order_relaxed);
+        head.store(current_head + 1, std::memory_order_release);
+    }
+
     bool pop(T& item)
     {
         const auto current_tail = tail.load(std::memory_order_relaxed);
@@ -60,4 +79,24 @@ public:
         tail.store(current_tail + 1, std::memory_order_release);
         return true;
     }
+
+    T* peek()
+    {
+        const auto current_tail = tail.load(std::memory_order_relaxed);
+        const auto current_head = head.load(std::memory_order_acquire);
+
+        if(current_tail == current_head) 
+        {
+            return nullptr;
+        }
+
+        return &buffer[current_tail & mask];
+    }
+
+    void advance()
+    {
+        const auto current_tail = tail.load(std::memory_order_relaxed);
+        tail.store(current_tail + 1, std::memory_order_release);
+    }
+
 };
