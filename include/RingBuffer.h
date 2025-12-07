@@ -99,4 +99,10 @@ public:
         tail.store(current_tail + 1, std::memory_order_release);
     }
 
+    size_t getSize()
+    {
+        size_t h = head.load(std::memory_order_relaxed);
+        size_t t = tail.load(std::memory_order_relaxed);
+        return h - t;
+    }
 };

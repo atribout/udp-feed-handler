@@ -9,9 +9,15 @@ enum class MsgType : uint8_t
     CancelOrder = 'C'
 };
 
+struct PacketHeader
+{
+    uint64_t seqNum;
+    MsgType type;
+};
+
 struct AddOrderMsg 
 {
-    MsgType type;
+    PacketHeader header;
     uint64_t id;
     int32_t price;
     uint32_t quantity;
@@ -20,7 +26,7 @@ struct AddOrderMsg
 
 struct CancelOrderMsg 
 {
-    MsgType type;
+    PacketHeader header;
     uint64_t id;
 };
 
@@ -28,6 +34,7 @@ struct CancelOrderMsg
 
 struct alignas(32) QueueItem
 {
+    uint64_t seqNum;
     uint64_t id;
     int32_t price;     // Ignored if type == CancelOrder
     uint32_t quantity; // Ignored if type == CancelOrder
