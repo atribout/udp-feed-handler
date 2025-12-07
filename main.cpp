@@ -8,46 +8,37 @@
 
 #include "OrderBook.h"
 #include "Order.h"
+#include "Listeners.h"
 #include "include/Messages.h"
 #include "include/RingBuffer.h"
 
-constexpr size_t BUFFER_SIZE = 1024;
-RingBuffer<AddOrderMsg, BUFFER_SIZE> ringBuffer;
+constexpr size_t BUFFER_SIZE = 4096;
+RingBuffer<QueueItem, BUFFER_SIZE> ringBuffer;
 std::atomic<bool> running{true};
-
-struct FeedListener
-{
-    void onTrade(uint64_t aggId, uint64_t passId, int32_t price, uint32_t qty)
-    {
-        std::cout << "   [EXEC] " << qty << " @ " << price << "\n";
-    }
-    void onOrderAdded(uint64_t, int32_t, uint32_t, Side) {}
-    void onOrderCancelled(uint64_t) {}
-    void onOrderRejected(uint64_t id, RejectReason r)
-    {
-        std::cout << "   [REJECT] Order " << id << " Reason: " << (int)r << "\n";
-    }
-    void onOrderBookUpdate(int32_t, uint32_t, Side) {}
-
-};
 
 void consumer_thread()
 {
     std::cout << "Engine started (waiting for data)...\n";
 
-    FeedListener listener;
-    OrderBook<FeedListener> lob(listener);
+    ConsoleListener listener;
+    OrderBook<ConsoleListener> lob(listener);
 
-    AddOrderMsg msg;
+    QueueItem msg;
 
     while(running)
     {
         if (ringBuffer.pop(msg))
         {
-            Side side = (msg.side == 'B') ? Side::Buy : Side::Sell;
-
-            Order newOrder(msg.id, msg.price, msg.quantity, side);
-            lob.submitOrder(newOrder);
+            if(msg.type == MsgType::AddOrder)
+            {
+                Side side = (msg.side == 'B') ? Side::Buy : Side::Sell;
+                Order newOrder(msg.id, msg.price, msg.quantity, side);
+                lob.submitOrder(newOrder);
+            }
+            else if (msg.type == MsgType::AddOrder)
+            {
+                lob.cancelOrder(msg.id);
+            }
         }
         else
         {
@@ -96,15 +87,38 @@ int main()
         {
             MsgType type = static_cast<MsgType>(buffer[0]);
 
+            QueueItem item;
+            item.type = type;
+
             if(type == MsgType::AddOrder)
             {
-                AddOrderMsg* msgPtr = reinterpret_cast<AddOrderMsg*>(buffer);
+                if (n < sizeof(AddOrderMsg)) continue;
 
-                if(!ringBuffer.push(*msgPtr))
+                AddOrderMsg* msg = reinterpret_cast<AddOrderMsg*>(buffer);
+                item.id = msg->id;
+                item.price = msg->price;
+                item.quantity = msg->quantity;
+                item.side = msg->side;
+
+                if(!ringBuffer.push(item))
                 {
-                    std::cerr << "Ring buffer FULL! Dropping packet.\n";
+                    std::cerr << "Buffer FULL (Add)\n";
                 }
             }
+            else if(type == MsgType::CancelOrder)
+            {
+                if (n < sizeof(CancelOrderMsg)) continue;
+
+                CancelOrderMsg* msg = reinterpret_cast<CancelOrderMsg*>(buffer);
+                item.id = msg->id;
+
+                if(!ringBuffer.push(item))
+                {
+                    std::cerr << "Buffer FULL (Cancel)\n";
+                }
+            }
+
+
         }
     }
 
