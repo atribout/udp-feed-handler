@@ -12,8 +12,8 @@
 #include "include/Messages.h"
 #include "include/RingBuffer.h"
 
-constexpr size_t BUFFER_SIZE = 1024;
-RingBuffer<AddOrderMsg, BUFFER_SIZE> ringBuffer;
+constexpr size_t BUFFER_SIZE = 4096;
+RingBuffer<QueueItem, BUFFER_SIZE> ringBuffer;
 std::atomic<bool> running{true};
 
 void consumer_thread()
@@ -23,24 +23,32 @@ void consumer_thread()
     EmptyListener listener;
     OrderBook<EmptyListener> lob(listener);
 
-    AddOrderMsg msg;
-
     uint64_t totalLatency = 0;
     uint64_t maxLatency = 0;
     uint64_t count = 0;
 
-    while (running) {
-        if (ringBuffer.pop(msg)) {
-            
+    while (running) 
+    {
+        QueueItem* item = ringBuffer.peek();
+        if (item) 
+        {
             auto start = std::chrono::high_resolution_clock::now();
-
+            
             // --- CRITICAL ZONE ---
-            Side side = (msg.side == 'B') ? Side::Buy : Side::Sell;
-            Order newOrder(msg.id, msg.price, msg.quantity, side);
-            lob.submitOrder(newOrder);
+            if(item->type == MsgType::AddOrder)
+            {
+                Side side = (item->side == 'B') ? Side::Buy : Side::Sell;
+                Order newOrder(item->id, item->price, item->quantity, side);
+                lob.submitOrder(newOrder);
+            }
+            else if (item->type == MsgType::CancelOrder)
+            {
+                lob.cancelOrder(item->id);
+            }
             // -----------------------------------------
 
             auto end = std::chrono::high_resolution_clock::now();
+            ringBuffer.advance();
             auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
             
             totalLatency += duration;
@@ -56,7 +64,9 @@ void consumer_thread()
                 totalLatency = 0;
                 maxLatency = 0;
             }
-        } else {
+        } 
+        else 
+        {
             std::this_thread::yield();
         }
     }
@@ -102,15 +112,38 @@ int main()
         {
             MsgType type = static_cast<MsgType>(buffer[0]);
 
+            QueueItem* slot = ringBuffer.claim();
+            if(!slot)
+            {
+                std::cerr << "Buffer FULL\n";
+                continue;
+            }            
+
+            slot->type = type;
+
             if(type == MsgType::AddOrder)
             {
-                AddOrderMsg* msgPtr = reinterpret_cast<AddOrderMsg*>(buffer);
+                if (n < sizeof(AddOrderMsg)) continue;
 
-                if(!ringBuffer.push(*msgPtr))
-                {
-                    std::cerr << "Ring buffer FULL! Dropping packet.\n";
-                }
+                AddOrderMsg* msg = reinterpret_cast<AddOrderMsg*>(buffer);
+                slot->id = msg->id;
+                slot->price = msg->price;
+                slot->quantity = msg->quantity;
+                slot->side = msg->side;
+
+                ringBuffer.publish();
             }
+            else if(type == MsgType::CancelOrder)
+            {
+                if (n < sizeof(CancelOrderMsg)) continue;
+
+                CancelOrderMsg* msg = reinterpret_cast<CancelOrderMsg*>(buffer);
+                slot->id = msg->id;
+
+                ringBuffer.publish();
+            }
+
+
         }
     }
 
