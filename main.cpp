@@ -23,22 +23,22 @@ void consumer_thread()
     ConsoleListener listener;
     OrderBook<ConsoleListener> lob(listener);
 
-    QueueItem msg;
-
     while(running)
     {
-        if (ringBuffer.pop(msg))
+        QueueItem* item = ringBuffer.peek();
+        if (item)
         {
-            if(msg.type == MsgType::AddOrder)
+            if(item->type == MsgType::AddOrder)
             {
-                Side side = (msg.side == 'B') ? Side::Buy : Side::Sell;
-                Order newOrder(msg.id, msg.price, msg.quantity, side);
+                Side side = (item->side == 'B') ? Side::Buy : Side::Sell;
+                Order newOrder(item->id, item->price, item->quantity, side);
                 lob.submitOrder(newOrder);
             }
-            else if (msg.type == MsgType::AddOrder)
+            else if (item->type == MsgType::CancelOrder)
             {
-                lob.cancelOrder(msg.id);
+                lob.cancelOrder(item->id);
             }
+            ringBuffer.advance();
         }
         else
         {
@@ -87,35 +87,35 @@ int main()
         {
             MsgType type = static_cast<MsgType>(buffer[0]);
 
-            QueueItem item;
-            item.type = type;
+            QueueItem* slot = ringBuffer.claim();
+            if(!slot)
+            {
+                std::cerr << "Buffer FULL\n";
+                continue;
+            }            
+
+            slot->type = type;
 
             if(type == MsgType::AddOrder)
             {
                 if (n < sizeof(AddOrderMsg)) continue;
 
                 AddOrderMsg* msg = reinterpret_cast<AddOrderMsg*>(buffer);
-                item.id = msg->id;
-                item.price = msg->price;
-                item.quantity = msg->quantity;
-                item.side = msg->side;
+                slot->id = msg->id;
+                slot->price = msg->price;
+                slot->quantity = msg->quantity;
+                slot->side = msg->side;
 
-                if(!ringBuffer.push(item))
-                {
-                    std::cerr << "Buffer FULL (Add)\n";
-                }
+                ringBuffer.publish();
             }
             else if(type == MsgType::CancelOrder)
             {
                 if (n < sizeof(CancelOrderMsg)) continue;
 
                 CancelOrderMsg* msg = reinterpret_cast<CancelOrderMsg*>(buffer);
-                item.id = msg->id;
+                slot->id = msg->id;
 
-                if(!ringBuffer.push(item))
-                {
-                    std::cerr << "Buffer FULL (Cancel)\n";
-                }
+                ringBuffer.publish();
             }
 
 

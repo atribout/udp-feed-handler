@@ -26,11 +26,11 @@ struct CancelOrderMsg
 
 #pragma pack(pop)
 
-struct QueueItem
+struct alignas(32) QueueItem
 {
-    MsgType type;
     uint64_t id;
     int32_t price;     // Ignored if type == CancelOrder
     uint32_t quantity; // Ignored if type == CancelOrder
+    MsgType type;
     char side;         // Ignored if type == CancelOrder
 };
