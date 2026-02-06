@@ -4,6 +4,10 @@ project(UdpFeedHandler)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_compile_options(-O3 -march=native)
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
