@@ -6,6 +6,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <immintrin.h>
+#include <sched.h>
+#include <pthread.h>
 
 #include "OrderBook.h"
 #include "Order.h"
@@ -18,8 +20,22 @@ constexpr size_t BUFFER_SIZE = 4096;
 RingBuffer<QueueItem, BUFFER_SIZE> ringBuffer;
 std::atomic<bool> running{true};
 
+void pin_to_core(int core_id) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+
+    pthread_t current_thread = pthread_self();
+    if (pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset) != 0) {
+        std::cerr << "Error pinning thread to core " << core_id << "\n";
+    } else {
+        std::cout << "Thread pinned to Core " << core_id << "\n";
+    }
+}
+
 void consumer_thread()
 {
+    pin_to_core(2);
     TSCClock::get().printCalibration();
     std::cout << "Engine started (waiting for data)...\n";
 
@@ -103,6 +119,7 @@ void consumer_thread()
 
 int main()
 {
+    pin_to_core(1);
     std::thread consumer(consumer_thread);
 
     int sockfd;
