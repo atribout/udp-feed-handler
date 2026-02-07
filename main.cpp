@@ -52,6 +52,9 @@ void consumer_thread()
     uint64_t lastSeqNum = 0;
     uint64_t gapCount = 0;
 
+    unsigned int dummy;
+    uint64_t start_cycles, end_cycles;
+
     while (running) 
     {
         size_t currentDepth = ringBuffer.getSize();
@@ -70,7 +73,7 @@ void consumer_thread()
             }
             lastSeqNum = item->seqNum;
 
-            uint64_t start_cycles = rdtsc();
+            start_cycles = __rdtscp(&dummy);
             // --- CRITICAL ZONE ---
             if(item->type == MsgType::AddOrder)
             {
@@ -84,7 +87,7 @@ void consumer_thread()
             }
             // -----------------------------------------
 
-            uint64_t end_cycles = rdtsc();
+            end_cycles = __rdtscp(&dummy);
 
             ringBuffer.advance();
 
