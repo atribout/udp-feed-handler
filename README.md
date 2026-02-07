@@ -72,8 +72,7 @@ make -j$(nproc)
 1. **Start the Engine:**
 
 ```bash
-# Sudo is required for thread pinning/priority
-sudo ./feed_handler 
+./feed_handler 
 ```
 
 2. **Start the Market Simulator (in another terminal):**
@@ -89,4 +88,3 @@ The system accepts binary messages (Little Endian, Packed):
 - **Add Order ('A'):** `[Type:1][ID:8][Price:4][Qty:4][Side:1]`
 
 - **Cancel Order ('C'):** `[Type:1][ID:8]`
-```
