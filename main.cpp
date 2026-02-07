@@ -35,7 +35,7 @@ void pin_to_core(int core_id) {
 
 void consumer_thread()
 {
-    pin_to_core(2);
+    pin_to_core(5);
     TSCClock::get().printCalibration();
     std::cout << "Engine started (waiting for data)...\n";
 
@@ -120,9 +120,12 @@ void consumer_thread()
     }
 }
 
+constexpr int BATCH_SIZE = 32;
+constexpr int BUF_LEN = 1024;
+
 int main()
 {
-    pin_to_core(1);
+    pin_to_core(4);
     std::thread consumer(consumer_thread);
 
     int sockfd;
@@ -148,50 +151,62 @@ int main()
         return -1;
     }
 
-    std::cout << "Network thread listening on port 1234..." << std::endl;
+    struct mmsghdr msgs[BATCH_SIZE];
+    struct iovec iovecs[BATCH_SIZE];
+    char buffers[BATCH_SIZE][BUF_LEN];
 
-    char buffer[1024];
-    socklen_t len = sizeof(cliaddr);
+    for (int i = 0; i < BATCH_SIZE; i++) {
+        iovecs[i].iov_base = buffers[i];
+        iovecs[i].iov_len = BUF_LEN;
+        
+        memset(&msgs[i], 0, sizeof(msgs[i]));
+        msgs[i].msg_hdr.msg_iov = &iovecs[i];
+        msgs[i].msg_hdr.msg_iovlen = 1;
+    }
+
+    std::cout << "Network thread listening with recvmmsg (Batch " << BATCH_SIZE << ")..." << std::endl;
 
     while (running)
     {
-        int n = recvfrom(sockfd, (char *)buffer, 1024, MSG_WAITALL, (struct sockaddr *)&cliaddr, &len);
+        int retval = recvmmsg(sockfd, msgs, BATCH_SIZE, MSG_DONTWAIT, NULL);
 
-        if (n > 0)
+        if (retval > 0)
         {
-            if (n < sizeof(PacketHeader)) continue;
-
-            PacketHeader* header = reinterpret_cast<PacketHeader*>(buffer);
-
-            QueueItem* slot = ringBuffer.claim();
-            if(!slot) continue;
-
-            slot->type = header->type;
-            slot->seqNum = header->seqNum;
-
-            if(header->type == MsgType::AddOrder)
+            for (int i = 0; i < retval; i++)
             {
-                if (n < sizeof(AddOrderMsg)) continue;
+                int len = msgs[i].msg_len;
+                char* packet_ptr = buffers[i];
 
-                AddOrderMsg* msg = reinterpret_cast<AddOrderMsg*>(buffer);
-                slot->id = msg->id;
-                slot->price = msg->price;
-                slot->quantity = msg->quantity;
-                slot->side = msg->side;
+                if (len < sizeof(PacketHeader)) continue;
 
-                ringBuffer.publish();
+                PacketHeader* header = reinterpret_cast<PacketHeader*>(packet_ptr);
+
+                QueueItem* slot = ringBuffer.claim();
+                if(!slot) continue;
+
+                slot->type = header->type;
+                slot->seqNum = header->seqNum;
+
+                if(header->type == MsgType::AddOrder && len >= sizeof(AddOrderMsg))
+                {
+                    AddOrderMsg* msg = reinterpret_cast<AddOrderMsg*>(packet_ptr);
+                    slot->id = msg->id;
+                    slot->price = msg->price;
+                    slot->quantity = msg->quantity;
+                    slot->side = msg->side;
+                    ringBuffer.publish();
+                }
+                else if(header->type == MsgType::CancelOrder && len >= sizeof(CancelOrderMsg))
+                {
+                    CancelOrderMsg* msg = reinterpret_cast<CancelOrderMsg*>(packet_ptr);
+                    slot->id = msg->id;
+                    ringBuffer.publish();
+                }
+                else
+                {
+                    _mm_pause();
+                }
             }
-            else if(header->type == MsgType::CancelOrder)
-            {
-                if (n < sizeof(CancelOrderMsg)) continue;
-
-                CancelOrderMsg* msg = reinterpret_cast<CancelOrderMsg*>(buffer);
-                slot->id = msg->id;
-
-                ringBuffer.publish();
-            }
-
-
         }
     }
 
