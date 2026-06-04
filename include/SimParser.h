@@ -1,4 +1,5 @@
 #pragma once
+#include <bit>
 #include <cstddef>
 #include "SimProtocol.h"
 #include "Messages.h"
@@ -14,28 +15,28 @@ public:
         if (header->type == MsgType::AddOrder && len >= sizeof(Sim::AddOrderMsg)) {
             const Sim::AddOrderMsg* msg = reinterpret_cast<const Sim::AddOrderMsg*>(packet_ptr);
             slot->type = MsgType::AddOrder;
-            slot->seqNum = header->seqNum;
-            slot->id = msg->id;
-            slot->price = msg->price;
-            slot->quantity = msg->quantity;
-            slot->side = msg->side;
+            slot->seqNum = std::byteswap(header->seqNum);
+            slot->id = std::byteswap(msg->id);
+            slot->price = std::byteswap(msg->price);
+            slot->quantity = std::byteswap(msg->quantity);
+            slot->side = std::byteswap(msg->side);
             ringBuffer.publish();
             return true;
         }
         else if (header->type == MsgType::CancelOrder && len >= sizeof(Sim::CancelOrderMsg))  {
             const Sim::CancelOrderMsg* msg = reinterpret_cast<const Sim::CancelOrderMsg*>(packet_ptr);
             slot->type = MsgType::CancelOrder;
-            slot->seqNum = header->seqNum;
-            slot->id = msg->id;
+            slot->seqNum = std::byteswap(header->seqNum);
+            slot->id = std::byteswap(msg->id);
             ringBuffer.publish();
             return true;
         }
         else if (header->type == MsgType::ExecutedOrder && len >= sizeof(Sim::ExecutedOrderMsg))  {
             const Sim::ExecutedOrderMsg* msg = reinterpret_cast<const Sim::ExecutedOrderMsg*>(packet_ptr);
             slot->type = MsgType::ExecutedOrder;
-            slot->seqNum = header->seqNum;
-            slot->id = msg->id;
-            slot->quantity = msg->quantity;
+            slot->seqNum = std::byteswap(header->seqNum);
+            slot->id = std::byteswap(msg->id);
+            slot->quantity = std::byteswap(msg->quantity);
             ringBuffer.publish();
             return true;
         }

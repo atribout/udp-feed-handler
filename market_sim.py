@@ -39,7 +39,8 @@ try:
                 qty = random.randint(1, 100)
                 side = b'B' if random.random() > 0.5 else b'S'
                 
-                packet = struct.pack('=QcQiIc', seq_num, b'A', order_id_counter, current_price, qty, side)
+                # Big-Endian : >
+                packet = struct.pack('>QcQiIc', seq_num, b'A', order_id_counter, current_price, qty, side)
                 live_orders[order_id_counter] = qty
                 order_id_counter += 1
                 
@@ -47,7 +48,7 @@ try:
                 target_id = random.choice(list(live_orders.keys()))
                 del live_orders[target_id]
                 
-                packet = struct.pack('=QcQ', seq_num, b'C', target_id)
+                packet = struct.pack('>QcQ', seq_num, b'C', target_id)
 
             elif msg_type == b'E':
                 target_id = random.choice(list(live_orders.keys()))
@@ -59,7 +60,7 @@ try:
                 if live_orders[target_id] <= 0:
                     del live_orders[target_id]
 
-                packet = struct.pack('=QcQI', seq_num, b'E', target_id, exec_qty)
+                packet = struct.pack('>QcQI', seq_num, b'E', target_id, exec_qty)
 
             sock.sendto(packet, (MCAST_GRP, MCAST_PORT))
             seq_num += 1
