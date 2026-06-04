@@ -3,7 +3,6 @@
 #include <cstddef>
 #include "SimProtocol.h"
 #include "Messages.h"
-#include "Globals.h"
 
 class SimParser {
 public:
@@ -20,7 +19,6 @@ public:
             slot->price = std::byteswap(msg->price);
             slot->quantity = std::byteswap(msg->quantity);
             slot->side = std::byteswap(msg->side);
-            ringBuffer.publish();
             return true;
         }
         else if (header->type == MsgType::CancelOrder && len >= sizeof(Sim::CancelOrderMsg))  {
@@ -28,7 +26,6 @@ public:
             slot->type = MsgType::CancelOrder;
             slot->seqNum = std::byteswap(header->seqNum);
             slot->id = std::byteswap(msg->id);
-            ringBuffer.publish();
             return true;
         }
         else if (header->type == MsgType::ExecutedOrder && len >= sizeof(Sim::ExecutedOrderMsg))  {
@@ -37,7 +34,6 @@ public:
             slot->seqNum = std::byteswap(header->seqNum);
             slot->id = std::byteswap(msg->id);
             slot->quantity = std::byteswap(msg->quantity);
-            ringBuffer.publish();
             return true;
         }
 
