@@ -9,20 +9,10 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     add_compile_options(-O3 -march=native -Wno-interference-size)
 endif()
 
-include(FetchContent)
-
-FetchContent_Declare(
-    lob_core
-    GIT_REPOSITORY https://github.com/atribout/limit-order-book.git
-    GIT_TAG        main
-)
-
-FetchContent_MakeAvailable(lob_core)
-
 find_package(Threads REQUIRED)
 
 add_executable(feed_handler src/main.cpp)
 
 target_include_directories(feed_handler PRIVATE include)
 
-target_link_libraries(feed_handler PRIVATE lob_core Threads::Threads)
+target_link_libraries(feed_handler PRIVATE Threads::Threads)

@@ -64,14 +64,13 @@ try:
 
             sock.sendto(packet, (MCAST_GRP, MCAST_PORT))
             seq_num += 1
+            if seq_num % 10000 == 0:
+                print(f"Stats: {seq_num} msgs sent. Current Price: {current_price}")
 
         # --- PAUSE BETWEEN BURSTS ---
         # Sleep briefly (1ms to 10ms) to let the C++ consumer catch up
         # This creates the "sawtooth" pattern
         time.sleep(random.uniform(0.001, 0.010)) 
-
-        if seq_num % 1000 == 0:
-            print(f"Stats: {seq_num} msgs sent. Current Price: {current_price}")
 
 except KeyboardInterrupt:
     print("\n Simulation stopped.")

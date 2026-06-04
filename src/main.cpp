@@ -6,15 +6,15 @@
 #include <print>
 #include <immintrin.h>
 
-#include "OrderBook.h"
-#include "Order.h"
-#include "Listeners.h"
-#include "Messages.h"
-#include "RingBuffer.h"
-#include "TSCClock.h"
+#include "lob/Listeners.h"
+#include "lob/Order.h"
+#include "lob/PassiveOrderBook.h"
 #include "net/NetworkProducer.h"
 #include "net/Receivers.h"
 #include "net/SimParser.h"
+#include "Messages.h"
+#include "RingBuffer.h"
+#include "TSCClock.h"
 
 constexpr size_t BUFFER_SIZE = 4096;
 RingBuffer<QueueItem, BUFFER_SIZE> ringBuffer;
@@ -27,7 +27,7 @@ void consumer_thread()
     std::println("Engine started (waiting for data)...");
 
     EmptyListener listener;
-    OrderBook<EmptyListener> lob(listener);
+    PassiveOrderBook<EmptyListener> lob(listener);
 
     // We store the latencies to print the percentiles later
     std::vector<uint64_t> samples;
@@ -64,15 +64,13 @@ void consumer_thread()
             // --- CRITICAL ZONE ---
             if(item->type == MsgType::AddOrder) {
                 Side side = (item->side == 'B') ? Side::Buy : Side::Sell;
-                Order newOrder(item->id, item->price, item->quantity, side);
-                lob.submitOrder(newOrder);
+                lob.onAddOrder(item->id, item->price, item->quantity, side);
             }
             else if (item->type == MsgType::CancelOrder) {
-                lob.cancelOrder(item->id);
+                lob.onCancelOrder(item->id);
             }
             else if (item->type == MsgType::ExecutedOrder) {
-                std::println("Order executed: id = {}, quantity = {}", item->id, item->quantity);
-                // lob.executedOrder(item->id, item->quantity);
+                lob.onOrderExecuted(item->id, item->quantity);
             }
             // -----------------------------------------
 
