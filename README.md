@@ -15,9 +15,9 @@ Built from scratch with strict **Hardware Sympathy** and zero external dependenc
 * **Intrusive Free List (Zero-Allocation):** The custom `OrderPool` eliminates the `std::vector` overhead for tracking free memory. Deallocated orders recycle their `next` pointer to chain themselves into the free list, achieving $\mathcal{O}(1)$ allocation/deallocation in ~2 CPU cycles.
 * **Spatial Locality & Cache Packing:** Internal data structures (`QueueItem`, `Order`) are heavily packed and aligned with `alignas(32)`. This ensures exactly two items fit perfectly into a single 64-byte L1 Cache Line without straddling boundaries, maximizing True Sharing and reducing memory bandwidth.
 * **False Sharing Prevention:** The Ring Buffer's atomic control pointers (`head` and `tail`) are isolated using `alignas(hardware_destructive_interference_size)`. This guarantees they reside on completely separate cache lines, eliminating the destructive ping-pong effect (False Sharing) between the Producer and Consumer cores.
-* **O(1) Flat Array Routing:** Tickers and strings are eliminated. The `MarketManager` uses Exchange *Locate Codes* (`instrumentId`) to directly address a pre-allocated array of `PassiveOrderBook`s. 
+* **O(1) Flat Array Routing:** Tickers and strings are eliminated. The `MarketManager` uses Exchange *Locate Codes* (`instrumentId`) to directly address a pre-allocated array of `PassiveOrderBook`. 
 * **Lock-Free Transport:** Cross-thread communication relies exclusively on a Single-Producer Single-Consumer (SPSC) Ring Buffer using a Zero-Copy Claim/Publish pattern.
-* **Kernel Isolation:** OS jitter is eliminated by pinning threads to isolated cores (`isolcpus=5`, `nohz_full`, `rcu_nocbs`).
+* **Kernel Isolation:** OS jitter is eliminated by pinning threads to isolated cores (`isolcpus`, `nohz_full`, `rcu_nocbs`).
 
 ## Performance Metrics
 
