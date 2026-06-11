@@ -25,7 +25,7 @@ private:
     }
 
 public:
-    void setPrice(int32_t price) {
+    constexpr void setPrice(int32_t price) noexcept {
         auto u_price = static_cast<uint32_t>(price);
 
         auto i0 = u_price / 64;
@@ -51,7 +51,7 @@ public:
         }
     }
 
-    void clearPrice(int32_t price) {
+    constexpr void clearPrice(int32_t price) noexcept {
         auto u_price = static_cast<uint32_t>(price);
 
         auto i0 = u_price / 64;
@@ -72,7 +72,7 @@ public:
         }
     }
 
-    int32_t getBestBid() const {
+    constexpr int32_t getBestBid() const noexcept {
         if(!root) [[unlikely]] return 0;
 
         auto i1 = highestBit(root);
@@ -81,7 +81,7 @@ public:
         return i0 * 64 + highestBit(l0[i0]);
     }
 
-    int32_t getBestAsk() const {
+    constexpr int32_t getBestAsk() const noexcept {
         if(!root) [[unlikely]] return MAX_PRICE;
 
         auto i1 = lowestBit(root);
