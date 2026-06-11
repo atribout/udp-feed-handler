@@ -2,6 +2,7 @@
 #include <vector>
 #include "Order.h"
 #include "OrderPool.h"
+#include "BboBitset.h"
 
 class PassiveOrderBook {
 private:
@@ -17,14 +18,14 @@ private:
     std::vector<Level> bids;
     std::vector<Level> asks;
 
-    int32_t minAskPrice = MAX_PRICE;
-    int32_t maxBidPrice = 0;
+    BboBitset bidPrices;
+    BboBitset askPrices;
 
 public:
 
     PassiveOrderBook(): bids(MAX_PRICE + 1), asks(MAX_PRICE + 1) {};
 
-    inline uint32_t addOrder(int32_t idx, OrderPool& pool) {
+    uint32_t addOrder(int32_t idx, OrderPool& pool) {
         Order& order = pool.get(idx);
         std::vector<Level>& bookSide = (order.side == Side::Buy) ? bids: asks;
         Level& level = bookSide[order.price];
@@ -41,13 +42,15 @@ public:
 
         level.totalVolume += order.quantity;
 
-        if(order.side == Side::Buy) maxBidPrice = std::max(maxBidPrice, order.price);
-        else minAskPrice = std::min(minAskPrice, order.price);
+        if (level.totalVolume == order.quantity) {
+            if (order.side == Side::Buy) bidPrices.setPrice(order.price);
+            else askPrices.setPrice(order.price);
+        }
 
         return level.totalVolume;
     }
 
-    inline uint32_t removeOrder(uint32_t idx, OrderPool& pool) {
+    uint32_t removeOrder(uint32_t idx, OrderPool& pool) {
         Order& order = pool.get(idx);
         std::vector<Level>& bookSide = (order.side == Side::Buy) ? bids: asks;
         Level& level = bookSide[order.price];
@@ -66,25 +69,18 @@ public:
             level.tail = order.prev;
         }
 
-        if (order.side == Side::Buy) {
-            if (order.price == maxBidPrice && level.totalVolume == 0) {
-                while (maxBidPrice > 0 && bids[maxBidPrice].totalVolume == 0) {
-                    --maxBidPrice;
-                }
-            }
-        }
-        else {
-            if (order.price == minAskPrice && level.totalVolume == 0) {
-                while (minAskPrice < MAX_PRICE && asks[minAskPrice].totalVolume == 0) {
-                    ++minAskPrice;
-                }
-            }
+        if (level.totalVolume == 0) {
+            if (order.side == Side::Buy) bidPrices.clearPrice(order.price);
+            else askPrices.clearPrice(order.price);
         }
 
         return level.totalVolume;
     }
 
-    inline uint32_t reduceVolume(Order& order, uint32_t qty) {
+    int getBestBid() const { return bidPrices.getBestBid(); }
+    int getBestAsk() const { return askPrices.getBestAsk(); }
+
+    uint32_t reduceVolume(Order& order, uint32_t qty) {
         std::vector<Level>& bookSide = (order.side == Side::Buy) ? bids: asks;
         bookSide[order.price].totalVolume -= qty;
         return bookSide[order.price].totalVolume;
